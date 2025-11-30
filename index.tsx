@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import ReactDOM from 'react-dom/client';
+import { createRoot } from 'react-dom/client';
 import { 
   User, FileText, Users, Download, Settings, Lock, 
   UserCheck, UserX, Trash2, Eye, Key, LogOut, 
@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 
 // ==========================================
-// CONFIGURATION
+// CONFIGURATION & FIREBASE INIT
 // ==========================================
 
 const firebaseConfig = {
@@ -165,7 +165,6 @@ const api = {
       return teachers;
     } catch (e) {
       console.error("Error fetching teachers:", e);
-      // Return initial teachers if DB fails, to prevent empty screen
       return INITIAL_TEACHERS;
     }
   },
@@ -253,7 +252,6 @@ const api = {
     return { teachers, students, attendance, studentLogs };
   },
 
-  // Optimized Login functions
   loginTeacher: async (code: string): Promise<Teacher | null> => {
     try {
       const docSnap = await getDoc(doc(db, 'teachers', code));
@@ -269,7 +267,6 @@ const api = {
 
   loginStudent: async (code: string): Promise<Student | null> => {
     try {
-      // Query students collection where code == provided code
       const q = query(collection(db, 'students'), where('code', '==', code));
       const querySnapshot = await getDocs(q);
       if (!querySnapshot.empty) {
@@ -428,7 +425,6 @@ const Login = ({ view, onNavigate, onLoginSuccess }: any) => {
     if (formData.password !== formData.confirmPassword) return setError('كلمات السر غير متطابقة');
     setLoading(true);
     
-    // Check duplication
     const existing = await api.loginStudent(formData.code);
     if (existing) {
        setLoading(false);
@@ -579,26 +575,12 @@ const AdminPanel = ({ onLogout }: any) => {
 
   const handleAddStudentToTeacher = async () => {
     if(!newStudentData.name || !newStudentData.teacherCode) return alert('يرجى ملء الاسم واختيار المعلم');
-    
     setLoading(true);
     const teacher = teachers[newStudentData.teacherCode];
-    if(!teacher) { 
-        setLoading(false); 
-        return alert('المعلم غير موجود'); 
-    }
-    
+    if(!teacher) { setLoading(false); return alert('المعلم غير موجود'); }
     const studentId = newStudentData.id || Date.now().toString().slice(-8);
-    
-    if (teacher.students.some(s => s.id === studentId)) {
-        setLoading(false);
-        return alert('هذا المعرف موجود بالفعل لدى هذا المعلم');
-    }
-
-    const updatedTeacher = { 
-        ...teacher, 
-        students: [...teacher.students, { id: studentId, name: newStudentData.name }] 
-    };
-    
+    if (teacher.students.some(s => s.id === studentId)) { setLoading(false); return alert('هذا المعرف موجود بالفعل لدى هذا المعلم'); }
+    const updatedTeacher = { ...teacher, students: [...teacher.students, { id: studentId, name: newStudentData.name }] };
     await api.saveTeacher(updatedTeacher);
     await refreshData();
     setNewStudentData({ name: '', teacherCode: '', id: '' });
@@ -699,7 +681,6 @@ const AdminPanel = ({ onLogout }: any) => {
             <StatCard label="حاضر" value={stats.present} icon={UserCheck} colorClass="text-green-600" />
             <StatCard label="غائب" value={stats.absent} icon={UserX} colorClass="text-red-600" />
           </div>
-          
           <div className="bg-white rounded-2xl shadow-sm p-4 mb-20">
               <h3 className="font-bold text-secondary mb-4 border-b pb-2">سجل الحضور ({filteredRecords.length})</h3>
               {filteredRecords.length === 0 ? (
@@ -724,7 +705,6 @@ const AdminPanel = ({ onLogout }: any) => {
                   </div>
               )}
           </div>
-
           <div className="fixed bottom-14 left-0 right-0 p-4 flex justify-center z-30 pointer-events-none">
              <Button onClick={handleExportCSV} variant="accent" className="pointer-events-auto shadow-lg"><Download className="w-4 h-4 inline ml-2" /> تقرير الحضور (CSV)</Button>
           </div>
@@ -797,7 +777,6 @@ const AdminPanel = ({ onLogout }: any) => {
                   </h2>
                   <span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-sm font-bold">{students.length} طالب</span>
               </div>
-
               <div className="relative mb-6">
                   <input 
                     type="text" 
@@ -808,7 +787,6 @@ const AdminPanel = ({ onLogout }: any) => {
                   />
                   <Search className="w-5 h-5 text-gray-400 absolute top-3.5 right-3" />
               </div>
-
               {filteredStudents.length === 0 ? (
                   <div className="text-center py-8 text-gray-400">لا يوجد طلاب مطابقين</div>
               ) : (
@@ -837,17 +815,9 @@ const AdminPanel = ({ onLogout }: any) => {
                                     </div>
                                 </div>
                             </div>
-                            <Button 
-                              className="p-2 h-8 w-8 flex items-center justify-center bg-red-50 text-red-500 hover:bg-red-500 hover:text-white shrink-0" 
-                              onClick={() => handleDeleteStudent(s.id)}
-                              title="حذف الطالب من النظام بالكامل"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                            <Button className="p-2 h-8 w-8 flex items-center justify-center bg-red-50 text-red-500 hover:bg-red-500 hover:text-white shrink-0" onClick={() => handleDeleteStudent(s.id)}><Trash2 className="w-4 h-4" /></Button>
                          </div>
-                         <Button fullWidth className="text-sm py-2" variant="primary" onClick={() => viewStudentLogs(s)} disabled={s.code === '---'}>
-                              <Eye className="w-4 h-4 inline ml-1" /> سجل اليوميات
-                         </Button>
+                         <Button fullWidth className="text-sm py-2" variant="primary" onClick={() => viewStudentLogs(s)} disabled={s.code === '---'}><Eye className="w-4 h-4 inline ml-1" /> سجل اليوميات</Button>
                        </div>
                      ))}
                    </div>
@@ -1229,16 +1199,12 @@ const App = () => {
   );
 };
 
-// ==========================================
-// RENDER ROOT
-// ==========================================
-
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
 
-const root = ReactDOM.createRoot(rootElement);
+const root = createRoot(rootElement);
 root.render(
   <React.StrictMode>
     <App />
